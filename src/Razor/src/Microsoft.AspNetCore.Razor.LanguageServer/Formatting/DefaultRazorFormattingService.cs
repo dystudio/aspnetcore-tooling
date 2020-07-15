@@ -3,11 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Razor.Language;
 using Microsoft.AspNetCore.Razor.Language.Syntax;
 using Microsoft.AspNetCore.Razor.LanguageServer.Common;
+using Microsoft.CodeAnalysis.Razor.ProjectSystem;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
@@ -58,16 +60,16 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             _logger = loggerFactory.CreateLogger<DefaultRazorFormattingService>();
         }
 
-        public override async Task<TextEdit[]> FormatAsync(Uri uri, RazorCodeDocument codeDocument, Range range, FormattingOptions options)
+        public override async Task<TextEdit[]> FormatAsync(Uri uri, DocumentSnapshot documentSnapshot, Range range, FormattingOptions options)
         {
             if (uri is null)
             {
                 throw new ArgumentNullException(nameof(uri));
             }
 
-            if (codeDocument is null)
+            if (documentSnapshot is null)
             {
-                throw new ArgumentNullException(nameof(codeDocument));
+                throw new ArgumentNullException(nameof(documentSnapshot));
             }
 
             if (range is null)
@@ -80,28 +82,24 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
                 throw new ArgumentNullException(nameof(options));
             }
 
-            var formattingContext = FormattingContext.Create(uri, codeDocument, range, options);
+            var codeDocument = await documentSnapshot.GetGeneratedOutputAsync();
+            var formattingContext = FormattingContext.Create(uri, codeDocument, options, range);
             var edits = await FormatCodeBlockDirectivesAsync(formattingContext);
             return edits;
         }
 
-        public override Task<TextEdit[]> ApplyFormattedEditsAsync(Uri uri, RazorCodeDocument codeDocument, RazorLanguageKind kind, TextEdit[] formattedEdits, FormattingOptions options)
+        public override async Task<TextEdit[]> ApplyFormattedEditsAsync(Uri uri, DocumentSnapshot documentSnapshot, RazorLanguageKind kind, TextEdit[] formattedEdits, FormattingOptions options)
         {
             // We have obtained a set of edits to the projected HTML/C# document from the client.
             // We need to apply those changes to the original Razor document as appropriate.
 
+            var codeDocument = await documentSnapshot.GetGeneratedOutputAsync();
             if (kind == RazorLanguageKind.Html)
             {
                 // We don't support formatting HTML edits yet.
                 var edits = RemapTextEdits(codeDocument, formattedEdits);
-                return Task.FromResult(edits);
+                return edits;
             }
-
-            // Create the formatting context for the razor document.
-            var span = TextSpan.FromBounds(0, codeDocument.Source.Length);
-            var documentText = codeDocument.GetSourceText();
-            var range = span.AsRange(documentText);
-            var formattingContext = FormattingContext.Create(uri, codeDocument, range, options);
 
             // Normalize and re-map the C# edits.
             var csharpText = SourceText.From(codeDocument.GetCSharpDocument().GeneratedCode);
@@ -116,41 +114,43 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             var rangeBeforeEdit = spanBeforeChange.AsRange(originalText);
             var rangeAfterEdit = spanAfterChange.AsRange(changedText);
 
+            // Create a new formatting context for the changed razor document.
+            var changedCodeDocument = await ParseTextAsync(documentSnapshot, changedText);
+            var formattingContext = FormattingContext.Create(uri, changedCodeDocument, options);
+
             // Now, for each affected line in the edited version of the document, remove x amount of spaces
             // at the front to account for extra indentation applied by the C# formatter.
             // This should be based on context.
             // For instance, lines inside @code/@functions block should be reduced one level
             // and lines inside @{} should be reduced by two levels.
-            var indentationEdits = new List<TextEdit>();
-            for (var i = rangeAfterEdit.Start.Line; i <= rangeAfterEdit.End.Line; i++)
-            {
-                var isInClassBody = true; // TODO: This should come from context.
-                var minCSharpIndentationLevel = isInClassBody ? 2 : 3;
-                var minCSharpIndentationLength = formattingContext.GetIndentationLevelString(minCSharpIndentationLevel).Length;
-                var existingWhitespaceLength = changedText.Lines[(int)i].GetFirstNonWhitespaceOffset() ?? 0;
-                if (existingWhitespaceLength < minCSharpIndentationLength)
-                {
-                    // Safeguard so we don't nuke unnecessary characters. We can't nuke more that the available whitespace.
-                    continue;
-                }
-
-                var whitespaceToRemoveLength = formattingContext.GetIndentationLevelString(minCSharpIndentationLevel - 1).Length;
-                indentationEdits.Add(new TextEdit()
-                {
-                    NewText = string.Empty,
-                    Range = new Range(new Position(i, 0), new Position(i, whitespaceToRemoveLength))
-                });
-            }
+            var indentationChanges = GetIndentationChanges(formattingContext, (int)rangeAfterEdit.Start.Line, (int)rangeAfterEdit.End.Line);
 
             // Apply the edits that remove indentation.
-            changes = indentationEdits.Select(e => e.AsTextChange(changedText));
-            changedText = changedText.WithChanges(changes);
+            changedText = changedText.WithChanges(indentationChanges);
 
             // Now that we have made all the necessary changes to the document. Let's diff the original vs final version and return the diff.
             var finalChanges = SourceTextDiffer.GetMinimalTextChanges(originalText, changedText, lineDiffOnly: false);
             var finalEdits = finalChanges.Select(f => f.AsTextEdit(originalText)).ToArray();
 
-            return Task.FromResult(finalEdits);
+            return finalEdits;
+        }
+
+        private async Task<RazorCodeDocument> ParseTextAsync(DocumentSnapshot originalDocument, SourceText changedText)
+        {
+            var engine = originalDocument.Project.GetProjectEngine();
+            var imports = ((DefaultDocumentSnapshot)originalDocument).State.GetImports((DefaultProjectSnapshot)originalDocument.Project);
+            var importSources = new List<RazorSourceDocument>();
+            foreach (var import in imports)
+            {
+                var sourceText = await import.GetTextAsync();
+                var source = sourceText.GetRazorSourceDocument(import.FilePath, import.TargetPath);
+                importSources.Add(source);
+            }
+
+            var changedSourceDocument = changedText.GetRazorSourceDocument(originalDocument.FilePath, originalDocument.TargetPath);
+
+            var codeDocument = engine.ProcessDesignTime(changedSourceDocument, originalDocument.FileKind, importSources, originalDocument.Project.TagHelpers);
+            return codeDocument;
         }
 
         private TextEdit[] RemapTextEdits(RazorCodeDocument codeDocument, TextEdit[] projectedTextEdits)
@@ -494,6 +494,55 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             return changed;
         }
 
+        private List<TextChange> GetIndentationChanges(FormattingContext context, int startLine, int endLine)
+        {
+            var sourceText = context.SourceText;
+            var editsToApply = new List<TextChange>();
+
+            for (var i = startLine; i <= endLine; i++)
+            {
+                var line = sourceText.Lines[i];
+                if (line.Span.Length == 0)
+                {
+                    // Empty line. C# formatter didn't remove it so we won't either.
+                    continue;
+                }
+
+                var leadingWhitespace = line.GetLeadingWhitespace();
+                var minCSharpIndentLevel = context.Indentations[i].MinCSharpIndentLevel;
+                var minCSharpIndentLength = context.GetIndentationLevelString(minCSharpIndentLevel).Length;
+                var desiredIndentationLevel = context.Indentations[i].IndentationLevel;
+                if (leadingWhitespace.Length < minCSharpIndentLength)
+                {
+                    // For whatever reason, the C# formatter decided to not indent this. Leave it as is.
+                    continue;
+                }
+                else
+                {
+                    // At this point we assume the C# formatter has relatively indented this line to the correct level.
+                    // All we want to do at this point is to indent/unindent this line based on the absolute indentation of the block
+                    // and the minimum C# indent level. We don't need to worry about the actual existing indentation here because it doesn't matter.
+                    var effectiveDesiredIndentationLevel = desiredIndentationLevel - minCSharpIndentLevel;
+                    var effectiveDesiredIndentation = context.GetIndentationLevelString(Math.Abs(effectiveDesiredIndentationLevel));
+                    if (effectiveDesiredIndentationLevel < 0)
+                    {
+                        // This means that we need to unindent.
+                        var span = new TextSpan(line.Start, effectiveDesiredIndentation.Length);
+                        editsToApply.Add(new TextChange(span, string.Empty));
+                    }
+                    else if (effectiveDesiredIndentationLevel > 0)
+                    {
+                        // This means that we need to indent.
+                        var span = new TextSpan(line.Start, 0);
+                        editsToApply.Add(new TextChange(span, effectiveDesiredIndentation));
+                    }
+                }
+
+            }
+
+            return editsToApply;
+        }
+
         private void TrackChangeInSpan(SourceText oldText, TextSpan originalSpan, SourceText newText, out TextSpan changedSpan, out TextSpan changeEncompassingSpan)
         {
             var affectedRange = newText.GetEncompassingTextChangeRange(oldText);
@@ -549,6 +598,34 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
 
             spanBeforeChange = affectedRange.Span;
             spanAfterChange = new TextSpan(spanBeforeChange.Start, affectedRange.NewLength);
+        }
+
+        private class SourceTextRazorProjectItem : RazorProjectItem
+        {
+            private readonly SourceText _sourceText;
+            private readonly string _filePath;
+
+            public SourceTextRazorProjectItem(SourceText sourceText, string filePath)
+            {
+                _sourceText = sourceText;
+                _filePath = filePath;
+            }
+
+            public override string BasePath => "/";
+
+            public override string FilePath => _filePath;
+
+            public override string PhysicalPath => _filePath;
+
+            public override bool Exists => true;
+
+            public override Stream Read()
+            {
+                var stream = new MemoryStream();
+                var writer = new StreamWriter(stream);
+                _sourceText.Write(writer);
+                return stream;
+            }
         }
     }
 }

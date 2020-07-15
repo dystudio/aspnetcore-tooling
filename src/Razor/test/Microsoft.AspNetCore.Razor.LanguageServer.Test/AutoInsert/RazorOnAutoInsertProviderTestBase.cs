@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Razor.Test.Common;
 using Microsoft.CodeAnalysis.Text;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
+using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace Microsoft.AspNetCore.Razor.LanguageServer.AutoInsert
 {
@@ -36,7 +37,7 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.AutoInsert
             };
 
             var provider = CreateProvider();
-            var context = FormattingContext.Create(uri, codeDocument, new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(position, position), options);
+            var context = FormattingContext.Create(uri, codeDocument, options, new Range(position, position));
 
             // Act
             if (!provider.TryResolveInsertion(position, context, out var edit, out var format))

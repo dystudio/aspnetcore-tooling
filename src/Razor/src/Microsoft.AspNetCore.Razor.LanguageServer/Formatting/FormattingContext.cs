@@ -62,7 +62,7 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             }
         }
 
-        public static FormattingContext Create(Uri uri, RazorCodeDocument codedocument, Range range, FormattingOptions options)
+        public static FormattingContext Create(Uri uri, RazorCodeDocument codedocument, FormattingOptions options, Range range = null)
         {
             if (uri is null)
             {
@@ -74,15 +74,13 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
                 throw new ArgumentNullException(nameof(codedocument));
             }
 
-            if (range is null)
-            {
-                throw new ArgumentNullException(nameof(range));
-            }
-
             if (options is null)
             {
                 throw new ArgumentNullException(nameof(options));
             }
+
+            var text = codedocument.GetSourceText();
+            range ??= TextSpan.FromBounds(0, text.Length).AsRange(text);
 
             var result = new FormattingContext()
             {

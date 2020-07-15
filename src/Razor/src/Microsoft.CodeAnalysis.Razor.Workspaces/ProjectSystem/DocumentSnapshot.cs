@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Razor.Language;
@@ -41,5 +42,10 @@ namespace Microsoft.CodeAnalysis.Razor.ProjectSystem
         public abstract bool TryGetGeneratedCSharpOutputVersionAsync(out VersionStamp result);
 
         public abstract bool TryGetGeneratedHtmlOutputVersionAsync(out VersionStamp result);
+
+        public virtual DocumentSnapshot WithText(SourceText text)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
