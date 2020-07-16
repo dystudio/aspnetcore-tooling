@@ -89,7 +89,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor.HtmlCSharp
             {
                 Character = request.Character,
                 Options = request.Options,
-                Position = projectionResult.Position,
+                Position = new Position(projectionResult.Position.Line, projectionResult.Position.Character + 1),
                 TextDocument = new TextDocumentIdentifier() { Uri = projectionResult.Uri }
             };
 

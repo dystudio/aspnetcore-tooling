@@ -6,7 +6,9 @@ using System.Collections.Generic;
 using Microsoft.AspNetCore.Razor.Language;
 using Microsoft.AspNetCore.Razor.LanguageServer.Formatting;
 using Microsoft.AspNetCore.Razor.Test.Common;
+using Microsoft.CodeAnalysis.Razor.ProjectSystem;
 using Microsoft.CodeAnalysis.Text;
+using Moq;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Xunit;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
@@ -37,7 +39,7 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.AutoInsert
             };
 
             var provider = CreateProvider();
-            var context = FormattingContext.Create(uri, codeDocument, options, new Range(position, position));
+            var context = FormattingContext.Create(uri, Mock.Of<DocumentSnapshot>(), codeDocument, options, new Range(position, position));
 
             // Act
             if (!provider.TryResolveInsertion(position, context, out var edit, out var format))

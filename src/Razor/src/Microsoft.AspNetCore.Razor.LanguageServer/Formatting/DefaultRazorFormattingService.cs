@@ -83,7 +83,7 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             }
 
             var codeDocument = await documentSnapshot.GetGeneratedOutputAsync();
-            var formattingContext = FormattingContext.Create(uri, codeDocument, options, range);
+            var formattingContext = FormattingContext.Create(uri, documentSnapshot, codeDocument, options, range);
             var edits = await FormatCodeBlockDirectivesAsync(formattingContext);
             return edits;
         }
@@ -101,6 +101,8 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
                 return edits;
             }
 
+            var context = FormattingContext.Create(uri, documentSnapshot, codeDocument, options);
+
             // Normalize and re-map the C# edits.
             var csharpText = SourceText.From(codeDocument.GetCSharpDocument().GeneratedCode);
             var normalizedEdits = NormalizeTextEdits(csharpText, formattedEdits);
@@ -115,18 +117,20 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             var rangeAfterEdit = spanAfterChange.AsRange(changedText);
 
             // Create a new formatting context for the changed razor document.
-            var changedCodeDocument = await ParseTextAsync(documentSnapshot, changedText);
-            var formattingContext = FormattingContext.Create(uri, changedCodeDocument, options);
+            var changedContext = await context.WithTextAsync(changedText);
 
             // Now, for each affected line in the edited version of the document, remove x amount of spaces
             // at the front to account for extra indentation applied by the C# formatter.
             // This should be based on context.
             // For instance, lines inside @code/@functions block should be reduced one level
             // and lines inside @{} should be reduced by two levels.
-            var indentationChanges = GetIndentationChanges(formattingContext, (int)rangeAfterEdit.Start.Line, (int)rangeAfterEdit.End.Line);
+            var indentationChanges = GetIndentationChanges(changedContext, (int)rangeAfterEdit.Start.Line, (int)rangeAfterEdit.End.Line);
 
             // Apply the edits that remove indentation.
             changedText = changedText.WithChanges(indentationChanges);
+            changedContext = await changedContext.WithTextAsync(changedText);
+
+            changedText = CleanupDocument(changedContext, rangeAfterEdit);
 
             // Now that we have made all the necessary changes to the document. Let's diff the original vs final version and return the diff.
             var finalChanges = SourceTextDiffer.GetMinimalTextChanges(originalText, changedText, lineDiffOnly: false);
@@ -135,22 +139,52 @@ namespace Microsoft.AspNetCore.Razor.LanguageServer.Formatting
             return finalEdits;
         }
 
-        private async Task<RazorCodeDocument> ParseTextAsync(DocumentSnapshot originalDocument, SourceText changedText)
+        private SourceText CleanupDocument(FormattingContext context, Range range = null)
         {
-            var engine = originalDocument.Project.GetProjectEngine();
-            var imports = ((DefaultDocumentSnapshot)originalDocument).State.GetImports((DefaultProjectSnapshot)originalDocument.Project);
-            var importSources = new List<RazorSourceDocument>();
-            foreach (var import in imports)
+            var text = context.SourceText;
+            range ??= TextSpan.FromBounds(0, text.Length).AsRange(text);
+            var csharpDocument = context.CodeDocument.GetCSharpDocument();
+
+            var changes = new List<TextChange>();
+            foreach (var mapping in csharpDocument.SourceMappings)
             {
-                var sourceText = await import.GetTextAsync();
-                var source = sourceText.GetRazorSourceDocument(import.FilePath, import.TargetPath);
-                importSources.Add(source);
+                var mappingSpan = new TextSpan(mapping.OriginalSpan.AbsoluteIndex, mapping.OriginalSpan.Length);
+                var mappingRange = mappingSpan.AsRange(text);
+                if (!range.OverlapsWith(mappingRange))
+                {
+                    // We don't care about this range. It didn't change.
+                    continue;
+                }
+
+                var mappingStartLineIndex = (int)mappingRange.Start.Line;
+                if (context.Indentations[mappingStartLineIndex].StartsInCSharpContext)
+                {
+                    // Doesn't need cleaning up.
+                    continue;
+                }
+
+                var mappingStartLine = text.Lines[mappingStartLineIndex];
+                var contentStart = mappingStartLine.GetFirstNonWhitespaceOffset((int)mappingRange.Start.Character);
+                if (contentStart == null)
+                {
+                    // There was no content here. Skip.
+                    continue;
+                }
+
+                var spanToReplace = new TextSpan(mappingSpan.Start, contentStart.Value);
+                if (!context.TryGetIndentationLevel(spanToReplace.End, out var contentIndentLevel))
+                {
+                    // Can't find the correct indentation for this content. Leave it alone.
+                    continue;
+                }
+
+                var replacement = Environment.NewLine + context.GetIndentationLevelString(contentIndentLevel);
+                var change = new TextChange(spanToReplace, replacement);
+                changes.Add(change);
             }
 
-            var changedSourceDocument = changedText.GetRazorSourceDocument(originalDocument.FilePath, originalDocument.TargetPath);
-
-            var codeDocument = engine.ProcessDesignTime(changedSourceDocument, originalDocument.FileKind, importSources, originalDocument.Project.TagHelpers);
-            return codeDocument;
+            var changedText = text.WithChanges(changes);
+            return changedText;
         }
 
         private TextEdit[] RemapTextEdits(RazorCodeDocument codeDocument, TextEdit[] projectedTextEdits)
