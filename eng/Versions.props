@@ -93,7 +93,7 @@
     <MicrosoftBuildFrameworkPackageVersion>15.8.166</MicrosoftBuildFrameworkPackageVersion>
     <MicrosoftBuildLocatorPackageVersion>1.2.6</MicrosoftBuildLocatorPackageVersion>
     <MicrosoftBuildPackageVersion>15.8.166</MicrosoftBuildPackageVersion>
-	<MicrosoftExtensionsCachingAbstractions>3.1.0</MicrosoftExtensionsCachingAbstractions>
+	  <MicrosoftExtensionsCachingAbstractions>3.1.0</MicrosoftExtensionsCachingAbstractions>
     <MicrosoftExtensionsCachingMemory>3.1.0</MicrosoftExtensionsCachingMemory>
     <MicrosoftInternalVisualStudioShellInterop140DesignTimeVersion>14.3.25407-alpha</MicrosoftInternalVisualStudioShellInterop140DesignTimeVersion>
     <MicrosoftNETCoreApp50PackageVersion>$(MicrosoftNETCoreAppRuntimewinx64PackageVersion)</MicrosoftNETCoreApp50PackageVersion>
