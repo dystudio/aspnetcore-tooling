@@ -12,6 +12,7 @@
 [assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.DependencyInjection.Abstractions.dll")]
 [assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.Caching.Abstractions.dll")]
 [assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.Caching.Memory.dll")]
+[assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.Primitives.dll")]
 [assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.Configuration.Json.dll")]
 [assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.Configuration.FileExtensions.dll")]
 [assembly: ProvideCodeBase(CodeBase = @"$PackageFolder$\Microsoft.Extensions.Configuration.dll")]

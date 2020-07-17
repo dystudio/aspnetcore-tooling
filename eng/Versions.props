@@ -57,6 +57,9 @@
     <MicrosoftExtensionsConfigurationJsonPackageVersion>5.0.0-preview.8.20361.2</MicrosoftExtensionsConfigurationJsonPackageVersion>
     <MicrosoftExtensionsDependencyModelPackageVersion>5.0.0-preview.8.20361.2</MicrosoftExtensionsDependencyModelPackageVersion>
     <MicrosoftExtensionsLoggingPackageVersion>5.0.0-preview.8.20361.2</MicrosoftExtensionsLoggingPackageVersion>
+    <MicrosoftExtensionsCachingAbstractionsPackageVersion>5.0.0-preview.8.20361.2</MicrosoftExtensionsCachingAbstractionsPackageVersion>
+    <MicrosoftExtensionsCachingMemoryPackageVersion>5.0.0-preview.8.20361.2</MicrosoftExtensionsCachingMemoryPackageVersion>
+    <MicrosoftExtensionsPrimitivesPackageVersion>5.0.0-preview.8.20361.2</MicrosoftExtensionsPrimitivesPackageVersion>
     <MicrosoftNETCoreAppInternalPackageVersion>5.0.0-preview.8.20361.2</MicrosoftNETCoreAppInternalPackageVersion>
     <MicrosoftNETCoreAppRefPackageVersion>5.0.0-preview.8.20361.2</MicrosoftNETCoreAppRefPackageVersion>
     <MicrosoftNETCoreAppRuntimewinx64PackageVersion>5.0.0-preview.8.20361.2</MicrosoftNETCoreAppRuntimewinx64PackageVersion>
@@ -93,8 +96,6 @@
     <MicrosoftBuildFrameworkPackageVersion>15.8.166</MicrosoftBuildFrameworkPackageVersion>
     <MicrosoftBuildLocatorPackageVersion>1.2.6</MicrosoftBuildLocatorPackageVersion>
     <MicrosoftBuildPackageVersion>15.8.166</MicrosoftBuildPackageVersion>
-	  <MicrosoftExtensionsCachingAbstractions>3.1.0</MicrosoftExtensionsCachingAbstractions>
-    <MicrosoftExtensionsCachingMemory>3.1.0</MicrosoftExtensionsCachingMemory>
     <MicrosoftInternalVisualStudioShellInterop140DesignTimeVersion>14.3.25407-alpha</MicrosoftInternalVisualStudioShellInterop140DesignTimeVersion>
     <MicrosoftNETCoreApp50PackageVersion>$(MicrosoftNETCoreAppRuntimewinx64PackageVersion)</MicrosoftNETCoreApp50PackageVersion>
     <MicrosoftNetRoslynDiagnosticsPackageVersion>2.6.3</MicrosoftNetRoslynDiagnosticsPackageVersion>
