@@ -49,7 +49,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
                 return shellOpenDocument;
             });
 
-            // 40 files * max 260 chars/file path => ~10 MB; likely lower as most paths aren't 260 chars
+            // 40 files * max 260 chars/file path => ~10 KB; likely lower as most paths aren't 260 chars
             _projectSupportsRazorLSPCache = new MemoryCache(
                     new MemoryCacheOptions()
                     {
