@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Composition;
 using Microsoft.CodeAnalysis.Razor.Workspaces;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Internal.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -25,7 +25,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
         private readonly Lazy<IVsUIShellOpenDocument> _vsUIShellOpenDocument;
         private readonly IVsFeatureFlags _featureFlags;
 
-        private readonly Dictionary<string, bool> _projectSupportsRazorLSPCache;
+        private readonly MemoryCache _projectSupportsRazorLSPCache;
 
         private bool? _featureFlagEnabled;
         private bool? _environmentFeatureEnabled;
@@ -49,7 +49,13 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
                 return shellOpenDocument;
             });
 
-            _projectSupportsRazorLSPCache = new Dictionary<string, bool>();
+            // 40 files * max 260 chars/file path => ~10 MB; likely lower as most paths aren't 260 chars
+            _projectSupportsRazorLSPCache = new MemoryCache(
+                    new MemoryCacheOptions()
+                    {
+                        SizeLimit = 40
+                    }
+                );
         }
 
         // Test constructor
@@ -133,7 +139,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
         // Private protected virtual for testing
         private protected virtual bool ProjectSupportsRazorLSPEditor(string documentMoniker, IVsHierarchy hierarchy)
         {
-            if (_projectSupportsRazorLSPCache.TryGetValue(documentMoniker, out var isSupported))
+            if (_projectSupportsRazorLSPCache.TryGetValue(documentMoniker, out bool isSupported))
             {
                 return isSupported;
             }
@@ -160,7 +166,7 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
 
         private bool CacheProjectRazorLSPEditorSupport(string documentMoniker, bool isSupported)
         {
-            _projectSupportsRazorLSPCache.Add(documentMoniker, isSupported);
+            _projectSupportsRazorLSPCache.Set(documentMoniker, isSupported);
             return isSupported;
         }
 
