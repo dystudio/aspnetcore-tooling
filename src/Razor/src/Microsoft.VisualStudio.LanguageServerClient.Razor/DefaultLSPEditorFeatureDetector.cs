@@ -166,7 +166,10 @@ namespace Microsoft.VisualStudio.LanguageServerClient.Razor
 
         private bool CacheProjectRazorLSPEditorSupport(string documentMoniker, bool isSupported)
         {
-            _projectSupportsRazorLSPCache.Set(documentMoniker, isSupported);
+            _projectSupportsRazorLSPCache.Set(
+                documentMoniker,
+                isSupported,
+                new MemoryCacheEntryOptions() { Size = 1 });
             return isSupported;
         }
 
